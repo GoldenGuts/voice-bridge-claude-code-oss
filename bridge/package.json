@@ -1,0 +1,22 @@
+{
+  "name": "voice-bridge-claude-code",
+  "version": "1.0.0",
+  "description": "Talk to your Claude Code sessions from Claude's voice mode on your phone.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "test": "node --test test/",
+    "deploy": "wrangler deploy",
+    "agent": "node agent/main.ts",
+    "setup": "scripts/setup.sh"
+  },
+  "dependencies": {
+    "ws": "^8.22.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261103.1",
+    "wrangler": "^4.157.0"
+  }
+}

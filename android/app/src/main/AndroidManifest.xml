@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Lets a press on the earbuds bring the voice screen up while another app is open. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <queries>
+        <package android:name="com.anthropic.claude" />
+        <package android:name="com.google.android.apps.bard" />
+    </queries>
+
+    <application
+        android:allowBackup="false"
+        android:label="Voice Trigger"
+        android:theme="@android:style/Theme.DeviceDefault">
+
+        <activity
+            android:name=".SetupActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Presses the widget's voice button, then closes. Not exported: other apps cannot start the mic. -->
+        <activity
+            android:name=".TriggerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Hears the earbud buttons. Notification access keeps it running; it ignores the notifications. -->
+        <service
+            android:name=".EarbudListener"
+            android:exported="true"
+            android:label="Voice Trigger earbud buttons"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

@@ -1,0 +1,15 @@
+node_modules/
+.wrangler/
+.dev.vars
+.DS_Store
+.gradle/
+build/
+*/build/
+local.properties
+keystore.properties
+*.jks
+*.keystore
+*.apk
+*.aab
+.idea/
+*.iml
