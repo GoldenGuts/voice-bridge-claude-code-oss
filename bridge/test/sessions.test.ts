@@ -2,10 +2,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import type { CliArgs, CliEvent } from "../agent/cli.ts";
+import { listOpenSessions } from "../agent/open-sessions.ts";
 import { SessionManager } from "../agent/sessions.ts";
 import { Tools } from "../agent/tools.ts";
 
@@ -146,8 +148,8 @@ test("tools ask instead of guessing, and continuing a desktop session forks it",
   assert.match(started.text, /full context/);
   assert.equal(procs[0].args.resume, "cli-123");
   assert.equal(procs[0].args.fork, true);
-  const toDesktop = await desk.run("send_message", { session: "free sites", text: "hi" });
-  assert.match(toDesktop.text, /not started by me/);
+  const closed = await new Tools({ manager, roots: [roots], open: () => [], desktop: () => [{ id: "local_1", cliSessionId: "cli-123", title: "Free sites live count", cwd: join(roots, "my-app"), lastActivityAt: Date.now() }] }).run("send_message", { session: "free sites", text: "hi" });
+  assert.match(closed.text, /is not open right now/);
   procs[0].emit(stop("VOICE: Picked up where it left off."));
 
   // "Anything I need to look into?": a real git repo with an uncommitted file, and nothing waiting.
@@ -204,4 +206,43 @@ test("stop presses Esc, the session limit holds, and outside folders are refused
   const refused = await outside.run("start_session", { continue_from: "home folder", task: "x" });
   assert.equal(refused.isError, true);
   assert.match(refused.text, /outside your projects folder/);
+});
+
+test("an open session gets the message through its socket; dead or outside sessions do not", async () => {
+  const { manager, roots } = setup();
+  const dir = mkdtempSync(join(tmpdir(), "vb-o-"));
+  const socket = join(dir, "s.sock");
+  const lines: string[] = [];
+  const server = createServer((c) => c.on("data", (d) => lines.push(d.toString())));
+  await new Promise<void>((r) => server.listen(socket, () => r()));
+
+  const reg = join(dir, "sessions");
+  mkdirSync(reg);
+  writeFileSync(join(reg, `${process.pid}.json`), JSON.stringify({ pid: process.pid, sessionId: "open-1", messagingSocketPath: socket }));
+  writeFileSync(join(reg, "99999999.json"), JSON.stringify({ pid: 99999999, sessionId: "dead", messagingSocketPath: socket })); // no such process
+  writeFileSync(join(reg, "1.json"), JSON.stringify({ pid: 1, sessionId: "no-socket" })); // too old for messages
+  writeFileSync(join(reg, "2.json"), "{ half written");
+  writeFileSync(join(reg, "1.abc.key"), "{}");
+  const open = listOpenSessions(reg);
+  assert.deepEqual(open.map((o) => o.sessionId), ["open-1"]);
+
+  const session = (cwd: string, title: string) => ({ id: "local_1", cliSessionId: "open-1", title, cwd, lastActivityAt: Date.now() });
+  const inside = new Tools({ manager, roots: [roots], open: () => open, desktop: () => [session(join(roots, "my-app"), "Billing work")] });
+  const sent = await inside.run("send_message", { session: "billing", text: "add a refund button" });
+  assert.match(sent.text, /^Sent to "Billing work"/);
+  await new Promise((r) => setTimeout(r, 30));
+  const frame = JSON.parse(lines.join(""));
+  assert.equal(frame.type, "user");
+  assert.match(frame.message.content, /voice bridge: add a refund button$/);
+  assert.equal(frame.token, undefined); // no secret is read or sent
+
+  const outside = new Tools({ manager, roots: [roots], open: () => open, desktop: () => [session(tmpdir(), "Home chat")] });
+  const refused = await outside.run("send_message", { session: "home chat", text: "x" });
+  assert.equal(refused.isError, true);
+  assert.match(refused.text, /outside your projects folder/);
+  assert.equal(lines.length, 1);
+
+  server.close();
+  const gone = new Tools({ manager, roots: [roots], open: () => [{ pid: 1, sessionId: "open-1", socket: join(dir, "gone.sock") }], desktop: () => [session(join(roots, "my-app"), "Billing work")] });
+  assert.match((await gone.run("send_message", { session: "billing", text: "x" })).text, /could not reach/);
 });

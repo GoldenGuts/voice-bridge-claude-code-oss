@@ -59,6 +59,7 @@ Things you can say:
 - "Use Opus at high effort as the orchestrator, with Sonnet helpers, and build the travel app."
 - "Start a new project called budget tracker. It should ..."
 - "What did the billing session finish with?" (sessions from the desktop app and the terminal count too)
+- "Tell the billing session to add a refund button." (it can be open in a terminal or the desktop app)
 - "Allow it." or "Tell it no, and use the staging database."
 
 Details, tools and troubleshooting: [bridge/README.md](bridge/README.md).
@@ -98,6 +99,8 @@ Read this before you share or use a connector URL.
 - Sessions run in Claude Code's `auto` permission mode, so routine actions do not ask. Anything else shows
   up as a question you answer by voice. `bypassPermissions` is refused. If your plan has no auto mode, or you want to
   approve everything, set `"permissionMode": "default"` in `~/.voice-bridge/config.json`.
+- The bridge can also send messages to sessions that are open on your Mac, if they are inside your project
+  folder. Each message arrives marked as coming from another session, and that session's permission rules still apply.
 - The agent accepts Claude Code's "trust this folder" question for you, for folders inside your project
   folder only. Keep only code you trust in that folder.
 - Each person deploys their own Worker. Nothing goes to a shared server. Session summaries go through your
@@ -111,10 +114,15 @@ More: [SECURITY.md](SECURITY.md).
 
 | Thing | How |
 | --- | --- |
-| Bridge | Setup script from zero on macOS, then a real session through a real Worker. Daily use in Claude voice mode on Android. 17 automated tests. |
+| Bridge | Setup script from zero on macOS, then a real session through a real Worker. Daily use in Claude voice mode on Android. 18 automated tests. |
+| Messages to open sessions | A real open session on Claude Code 2.1.318, sent through the real tool. Not yet tried in voice mode. |
 | Earphone app: keys, music forwarding, calls | On a Motorola edge 30 (Android 17) with simulated key presses and a test music app. 7 automated tests. |
 | Earphone app: opening Claude and Gemini | The same widget code has opened both on a Samsung Galaxy Z Flip7 (Android 17). |
 | Real earphones from different brands | Not yet. Please open an issue with what yours send. |
+
+## Thanks
+
+[talk-to-claude-code](https://github.com/osaighi/talk-to-claude-code) (MIT) worked out how to message an open Claude Code session.
 
 ## License
 

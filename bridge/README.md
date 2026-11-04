@@ -22,7 +22,7 @@ Claude app (voice) ──► claude.ai ──► Cloudflare Worker ──► Dur
 | `get_session` | One session: what it did and what it needs from you. Can wait up to 12 s |
 | `start_session` | A new session in a project, or `continue_from` an older session. Optional `model`, `effort`, `helper_model`, `helper_effort` |
 | `new_project` | Creates a folder with git, and starts a session there |
-| `send_message` | A follow-up. It runs next if the session is busy |
+| `send_message` | A message to a bridge session, or to a desktop or terminal session that is open now. It runs next if the session is busy |
 | `answer_question` | Allow or deny a permission question |
 | `stop_session` | Stops the current work |
 | `list_projects` | The project folders |
@@ -62,6 +62,15 @@ npm test
 - **Voice Claude says the Mac is offline.** Open `https://<your-worker>.workers.dev/health`. See `~/.voice-bridge/agent.log`. A Mac that sleeps goes offline.
 - **A session fails at once.** The log shows the last screen of the session. If your plan has no auto mode, set `permissionMode` to `default`.
 - **A session does not show on your phone.** Remote Control needs Claude Code signed in with a claude.ai account, not an API key.
+
+## Messages to open sessions
+
+`send_message` can reach a session that the bridge did not start, if it is open now and inside your project folder.
+It uses the same local socket that Claude Code sessions use to message each other (`agent/open-sessions.ts`). The agent reads no secret for this.
+
+- The session sees "another Claude session sent a message", not your typing. It treats the message as a teammate's request, so it can decide to check with you first.
+- Its permission questions stay on its own screen, or in the Claude app if it has Remote Control. The bridge cannot hear or answer them.
+- Claude Code does not document this interface, so an update can break it. It needs Claude Code 2.1.229 or newer in that session. The agent then says that it cannot reach the session, or that the session is not open.
 
 ## Limits
 
