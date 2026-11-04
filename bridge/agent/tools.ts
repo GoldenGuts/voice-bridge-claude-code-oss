@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { basename, join, sep } from "node:path";
 import { type RepoState, scanAttention } from "./attention.ts";
 import { type DesktopSession, folderLabel, kindLabel, lastWords, listDesktopSessions, listOtherSessions, transcriptPath } from "./desktop.ts";
+import { type OpenSession, listOpenSessions, messageOpenSession } from "./open-sessions.ts";
 import { gitAlias } from "./projects.ts";
 import { listProjects, resolveProject } from "./projects.ts";
 import type { SessionManager, SessionRecord, Setup } from "./sessions.ts";
@@ -15,6 +16,7 @@ export interface ToolDeps {
   manager: SessionManager;
   roots: string[];
   desktop?: () => DesktopSession[]; // tests pass their own
+  open?: () => OpenSession[]; // tests pass their own
   repos?: (roots: string[]) => Promise<RepoState[]>;
 }
 
@@ -122,7 +124,7 @@ export class Tools {
         case "new_project":
           return this.newProject(String(args.name ?? ""), String(args.task ?? ""), parseSetup(args));
         case "send_message":
-          return this.send(String(args.session ?? ""), String(args.text ?? ""));
+          return await this.send(String(args.session ?? ""), String(args.text ?? ""));
         case "answer_question":
           return this.answer(String(args.session ?? ""), args.decision, args.note);
         case "stop_session":
@@ -194,7 +196,8 @@ export class Tools {
   private resolve(query: string): Ref {
     const q = query.trim().toLowerCase().replace(/^(session|number|desktop)\s+/, "");
     if (!q) throw new Error("Which session? Say its name or number from the updates.");
-    const desk = () => this.desktop();
+    // The same wide look as check_attention, so a session it names can be found.
+    const desk = () => this.desktop({ sinceMs: Date.now() - 72 * 3600_000, limit: 25 });
     const fromRef = (ref: string | undefined): Ref | undefined => {
       if (!ref) return;
       if (ref.startsWith("b:")) {
@@ -234,7 +237,7 @@ export class Tools {
           `${kindLabel(d)} "${d.title}" in ${this.where(d.cwd)}, last active ${ago(d.lastActivityAt)}.${d.source === "other" ? " It was started outside the desktop app, in a terminal or from the phone." : ""}`,
           w ? `Latest: ${w.summary}` : "I can't read its latest answer.",
           w?.ask ? `Needs from you: ${w.ask}` : "",
-          "It is read-only here. To carry on, I can continue it in a new session.",
+          "If it is open, I can send it a message. If it is closed, I can continue it in a new session with its full context.",
         ].filter(Boolean).join("\n"),
       };
     }
@@ -309,14 +312,29 @@ export class Tools {
     return { text: `Created the new project ${folder} and started ${rec.name}: ${rec.title}.${how ? ` ${how}` : ""} Ask me for an update in a few minutes.` };
   }
 
-  private send(query: string, text: string): Reply {
+  private async send(query: string, text: string): Promise<Reply> {
     if (!text.trim()) return { text: "What should I send?", isError: true };
     const ref = this.resolve(query);
-    if (ref.kind === "desktop") {
-      return { text: `"${ref.d.title}" was not started by me, so I can't type into it. I can continue it in a new session with that message instead.` };
-    }
+    if (ref.kind === "desktop") return this.sendToOpen(ref.d, text);
     const how = this.deps.manager.send(ref.rec, text);
     return { text: how === "queued" ? `${ref.rec.name} is still working. Your message runs next.` : `Sent to ${ref.rec.name}. It is working on it.` };
+  }
+
+  /** A session not started by the bridge: it can get a message only while it is open. */
+  private async sendToOpen(d: DesktopSession, text: string): Promise<Reply> {
+    const open = (this.deps.open ?? listOpenSessions)().find((o) => o.sessionId === d.cliSessionId);
+    if (!open) {
+      return { text: `"${d.title}" is not open right now, so I can't message it. I can continue it in a new session with that message instead.` };
+    }
+    if (!this.inRoots(d.cwd)) {
+      return { text: `"${d.title}" is outside your projects folder, so I can't message it from here.`, isError: true };
+    }
+    try {
+      await messageOpenSession(open, `Relayed from the user, who is speaking through a voice bridge: ${text}`);
+    } catch {
+      return { text: `I could not reach "${d.title}". It may have just closed.`, isError: true };
+    }
+    return { text: `Sent to "${d.title}". If it is busy, the message runs next. A permission question from it stays on its own screen, so I can't answer that one.` };
   }
 
   private answer(query: string, decision: unknown, note: unknown): Reply {

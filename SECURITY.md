@@ -10,6 +10,9 @@ questions. The limits are:
 - `bypassPermissions` is refused, so Claude Code's own permission checks stay on.
 - At most 4 sessions work at the same time (`maxWorking`).
 
+The URL can also send messages to sessions that are open on your Mac, but only inside your project folder. Those
+sessions keep their own permission rules, and they see each message as coming from another session.
+
 The MCP spec prefers OAuth to a token in the URL. This project uses the token because it is simple for
 one person. It is not made for shared or team use.
 
